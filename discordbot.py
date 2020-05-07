@@ -21,5 +21,11 @@ async def ping(ctx):
 async def ping2(ctx):
     await ctx.send('pong2')
 
+# 起動時に動作する処理
+@client.event
+async def on_ready():
+    # 起動したらターミナルにログイン通知が表示される
+    print('ログインしました')
+
 
 bot.run(token)
