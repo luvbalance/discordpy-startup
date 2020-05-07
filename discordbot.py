@@ -41,4 +41,4 @@ async def on_message(message):
         await message.channel.send(params)
         return
     
-bot.run(token)
+client.run(token)
