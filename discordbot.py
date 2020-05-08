@@ -115,7 +115,6 @@ class Statinfo:
 #実行する環境の環境変数に'DISCORD_BOT_TOKEN'を登録しておけば、
 #ローカルPC実行、Heloku実行どちらでも対応可能です。
 token = os.environ['DISCORD_BOT_TOKEN']
-#token =  'NzA3NTM0NTk1MzI2ODY5NjA0.XrSptg.ON_q1I_s3D14DTxqxXw5Onm8Z14'
 
 #これはbot frameworkを使った書き方(discordpy-startupのサンプルコードのまま)
 #bot = commands.Bot(command_prefix='/')
