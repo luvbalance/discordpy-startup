@@ -252,7 +252,6 @@ async def on_message(message):
         #登録完了
         retstr = stat_infos[author_key].showstat()+'\n'
         await message.channel.send(retstr)
-<<<<<<< HEAD
         return
     elif command == '/init':
         #============================================================
@@ -326,81 +325,6 @@ async def on_message(message):
     elif command == '/gogohelp':
         await message.channel.send(helpstr())
         return
-=======
-        return
-    elif command == '/init':
-        #============================================================
-        #状態初期化
-        #============================================================
-        #サーバーID文字列の取得(メンバー状態ハッシュリストを取り出すためのキーとして使用)
-        guild_key = str(message.guild.id)
-        #サーバーIDに対応するメンバー状態ハッシュリストを初期化
-        server_infos[guild_key] = {}
-        #stat_infos = server_infos[guild_key]
-        #for User in message.channel.Users:
-            #stat_infos[author_key] = Statinfo(User, 3, 2, 0)
-
-        await message.channel.send('**待機状況を初期化しました**')
-        return
-
-    elif command == '/stat':
-        #============================================================
-        #状態一覧表示
-        #============================================================
-        guild_key = str(message.guild.id)
-        stat_infos = server_infos[guild_key]
-
-        c_player = 0
-        c_wait = 0
-        c_repair = 0
-        c_all = 0
-        for stat_info in stat_infos.values():
-            c_player +=1
-            c_wait += stat_info.wait
-            c_repair += stat_info.repair
-        c_all = c_player * 3
-        c_go = c_all - c_wait - c_repair
-
-        retstr = '**待機状況**(登録メンバー数:'+str(c_player)+')\n'
-
-        retstr += '待機数/機体数:'+ str(c_wait)+ '/' + str(c_all)
-        if(c_player>0):
-            retstr +='('+str(c_wait*100//c_all)+'%)'
-        retstr+='\n'
-        retstr += '出撃数/機体数:'+ str(c_go)+ '/' + str(c_all)
-        if(c_player>0):
-            retstr +='('+str(c_go*100//c_all)+'%)'
-        retstr+='\n'
-        for stat_info in stat_infos.values():
-            retstr += stat_info.showstat()+'\n'
-
-        await message.channel.send(retstr)
-        return
-
-    elif command == '/chlist':
-        #============================================================
-        #chlist
-        #============================================================
-        # コマンド'/test'の実装
-        #テストコード：接続先サーバーの全テキストチャンネルの抽出
-        text_channel_list = []
-        for channel in message.guild.text_channels:
-            text_channel_list.append(channel)
-        #これだと全サーバー分の抽出
-        #for guild in client.guilds:
-        #    for channel in guild.text_channels:
-        #        text_channel_list.append(channel)
-        retstr = '**テキストチャンネル一覧**\n'
-        for text_channel in text_channel_list:
-            retstr += '・['+str(text_channel.id)+']'+text_channel.name+'\n'
-        await message.channel.send(retstr)
-        print(retstr)
-
-        return
-    elif command == '/gogohelp':
-        await message.channel.send(helpstr())
-        return
->>>>>>> 8ede3391aa23261a2aee35379e6c7b58e316d279
 
 #============================================================
 #clientの接続
