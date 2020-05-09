@@ -107,8 +107,6 @@ class Statinfo:
         if retsubstr !='':
             retstr += '\t待('+retsubstr+')'
 
-        retstr += '\n'
-
         return retstr
 
         
