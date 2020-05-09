@@ -105,7 +105,7 @@ class Statinfo:
             retsubstr += trw3
 
         if retsubstr !='':
-            retstr += '\t待('+retsubstr+')'
+            retstr += '\t修('+retsubstr+')'
         return retstr
 
         
