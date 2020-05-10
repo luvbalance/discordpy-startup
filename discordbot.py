@@ -8,7 +8,7 @@ import traceback
 import re       #正規表現
 import random   #乱数
 
-from PIL import Image, ImageDraw, ImageFilter
+#from PIL import Image, ImageDraw, ImageFilter
 import io
 
 #実行する環境の環境変数に'DISCORD_BOT_TOKEN'を登録しておけば、
@@ -517,19 +517,20 @@ async def on_message(message):
         print(retstr)
 
         return
-    elif command == '/image':
+        #test
+    # elif command == '/image':
         
-        im = Image.new('RGB', (500, 300), (128, 128, 128))
-        draw = ImageDraw.Draw(im)
-        draw.ellipse((100, 100, 150, 200), fill=(255, 0, 0), outline=(0, 0, 0))
-        draw.rectangle((200, 100, 300, 200), fill=(0, 192, 192), outline=(255, 255, 255))
-        draw.line((350, 200, 450, 100), fill=(255, 255, 0), width=10)
-        output = io.BytesIO()
-        im.save(output, format='PNG')
-        image_png = output.getvalue()
-        await message.channel.send(file=discord.File(image_png, 'cool_image.png'))
+    #     im = Image.new('RGB', (500, 300), (128, 128, 128))
+    #     draw = ImageDraw.Draw(im)
+    #     draw.ellipse((100, 100, 150, 200), fill=(255, 0, 0), outline=(0, 0, 0))
+    #     draw.rectangle((200, 100, 300, 200), fill=(0, 192, 192), outline=(255, 255, 255))
+    #     draw.line((350, 200, 450, 100), fill=(255, 255, 0), width=10)
+    #     output = io.BytesIO()
+    #     im.save(output, format='PNG')
+    #     image_png = output.getvalue()
+    #     await message.channel.send(file=discord.File(image_png, 'cool_image.png'))
 
-        return
+    #     return
 
     elif command == '/gogohelp':
         await message.channel.send(helpstr())
