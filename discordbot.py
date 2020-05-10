@@ -5,7 +5,53 @@ from discord.ext import tasks
 from discord.ext import commands
 import os
 import traceback
-import re   #正規表現
+import re       #正規表現
+import random   #乱数
+
+from PIL import Image, ImageDraw, ImageFilter
+import io
+
+#実行する環境の環境変数に'DISCORD_BOT_TOKEN'を登録しておけば、
+#ローカルPC実行、Heloku実行どちらでも対応可能です。
+token = os.environ['DISCORD_BOT_TOKEN']
+
+compmes =['{0}機修理できました'
+        ,'{0}機修理できたような気がする'
+        ,'{0}機、これで治ったかしら…'
+        ,'{0}機修理できました！'
+        ,'{0}機修理完了です'
+        ,'{0}機修理完了！'
+        ,'{0}機、間に合ったかしら'
+        ,'{0}機修理したよー'
+        ,'{0}機準備しといたぞ'
+        ,'{0}機、いつでも行けるぞ'
+        ,'{0}機だ…さっさと行ってこい！'
+        ,'{0}機修理できましたわ'
+        ,'{0}機…使って'
+        ,'{0}機…使えばいいと思うよ'
+        ,'{0}機、大事に使えよ'
+        ,'{0}機、大切にしてね'
+        ,'{0}機…2度と壊すなよ'
+        ,'{0}機…死ぬなよ'
+        ,'{0}機…絶対帰ってきてね'
+        ,'この{0}機、無駄にするなよ'
+        ,'{0}機治しておいてやったぞ'
+        ,'約束の{0}機だ…'
+        ,'{0}機…代金はあとでいい…'
+        ,'{0}機…いや、なんでもない'
+        ,'{0}機…あとで奢れよ'
+        ,'ほら、{0}機だ'
+        ,'{0}機だ、持ってけ'
+        ]
+#メッセージ乱数
+def getcompmes():
+    base = random.randint(0, 4)
+    if base == 0:
+        # 1/5の確率でレアメッセージ出現
+        return compmes[random.randint(1, len(compmes)-1)]
+    else:
+        # 9/10の確率で通常メッセージ
+        return compmes[0]
 
 #ヘルプ
 def helpstr():
@@ -66,22 +112,96 @@ def NumIcon(value):
 
     return ret
 
+def GetRWTimeStr(rw, ct):
+    if(rw=='' or ct==''):
+        return ""
+    if(not rw.isnumeric()):
+        return ""
+    rwint = int(rw)
+
+    rwt= ct + datetime.timedelta(minutes=rwint)
+
+    return rwt.strftime("%H:%M")
+
+#サーバー毎の状態クラス
+class ServerInfo:
+    def __init__(self, statinfos, channel):
+        self.statinfos = statinfos
+        self.channel = channel
+
 #メンバー一人分の状態管理クラス
 class Statinfo:
-    def __init__(self, user, wait, recover, repair, rw1, rw2, rw3):
+    def __init__(self, user, channel, wait, recover, repair, rw1, rw2, rw3):
         self.User = user
+        self.Channel = channel
         self.recover = recover
         self.repair = repair
         self.rw1 = rw1
         self.rw2 = rw2
         self.rw3 = rw3
+        self.ct = datetime.datetime.now()
     def stat(self):
         return str(self.wait) + str(self.recover) +str(self.repair)
+    def updaterw3(self):
+        if str.isnumeric(self.rw3):
+            rw3i = int(self.rw3)
+            rw3i -=1
+            if(rw3i<1):
+                self.rw3 = ''
+                if self.repair >0:
+                    self.repair -= 1
+                    self.wait += 1
+                return True
+            else:
+                self.rw3 = str(rw3i)
+        return False
+
+    def updaterw2(self):
+        if str.isnumeric(self.rw2):
+            rw2i = int(self.rw2)
+            rw2i -=1
+            if(rw2i<1):
+                self.rw2 = ''
+                if self.repair >0:
+                    self.repair -= 1
+                    self.wait += 1
+                if self.rw3!='':
+                    self.rw2 = self.rw3
+                    self.rw3=''
+                return True
+            else:
+                self.rw2 = str(rw2i)
+        return False
+
+    def updaterw1(self):
+        if str.isnumeric(self.rw1):
+            rw1i = int(self.rw1)
+            rw1i -=1
+            if(rw1i<1):
+                self.rw1 = ''
+                if self.repair >0:
+                    self.repair -= 1
+                    self.wait += 1
+                if self.rw2!='':
+                    self.rw1 = self.rw2
+                    self.rw2=''
+                if self.rw3!='':
+                    if self.rw1=='':
+                        self.rw1 = self.rw3
+                        self.rw3=''
+                    elif self.rw2=='':
+                        self.rw2 = self.rw3
+                        self.rw3=''
+                return True
+            else:
+                self.rw1 = str(rw1i)
+        return False
     def showstat(self):
-        retstr = NumIcomStr(self.stat())+'\t:'+self.User.display_name
+        retstr = self.ct.strftime("%H:%M")+' '+self.User.display_name
+        #retstr = self.ct.strftime("%H:%M")+' '+NumIcomStr(self.stat())+self.User.display_name
         retsubstr = ''
         if self.rw1!='':
-            retsubstr += self.rw1
+            retsubstr += GetRWTimeStr(self.rw1, self.ct)
 
         trw2 = ''
         if self.rw2!='':
@@ -91,7 +211,7 @@ class Statinfo:
         if trw2!='':
             if(len(retsubstr)>0):
                 retsubstr += ','
-            retsubstr += trw2
+            retsubstr += GetRWTimeStr(trw2, self.ct)
 
         trw3 = ''
         if self.rw3!='':
@@ -102,16 +222,53 @@ class Statinfo:
         if trw3!='':
             if(len(retsubstr)>0):
                 retsubstr += ','
-            retsubstr += trw3
+            retsubstr += GetRWTimeStr(trw3, self.ct)
 
+        #retstr += '\t\t\t:free::heart_decoration::ambulance:\n'
+        retstr += '\n\t'
+        #retstr += ':free:'
+        retstr += NumIcon(str(self.wait))
+        #retstr += ' :heart_decoration:'
+        retstr += NumIcon(str(self.recover))
+        #retstr += ' :ambulance:'
+        retstr += NumIcon(str(self.repair))
         if retsubstr !='':
-            retstr += '\t修('+retsubstr+')'
+            retstr += ' :hospital:('+retsubstr+')'
+        else:
+            retstr += ' :hospital:(-)'
         return retstr
+    # def showstat(self):
+    #     retstr = self.ct.strftime("%H:%M")+' '+NumIcomStr(self.stat())+self.User.display_name
+    #     retsubstr = ''
+    #     if self.rw1!='':
+    #         retsubstr += GetRWTimeStr(self.rw1, self.ct)
 
-        
-#実行する環境の環境変数に'DISCORD_BOT_TOKEN'を登録しておけば、
-#ローカルPC実行、Heloku実行どちらでも対応可能です。
-token = os.environ['DISCORD_BOT_TOKEN']
+    #     trw2 = ''
+    #     if self.rw2!='':
+    #         trw2=self.rw2
+    #     elif self.repair>1:
+    #         trw2=self.rw1
+    #     if trw2!='':
+    #         if(len(retsubstr)>0):
+    #             retsubstr += ','
+    #         retsubstr += GetRWTimeStr(trw2, self.ct)
+
+    #     trw3 = ''
+    #     if self.rw3!='':
+    #         trw3=self.rw3
+    #     elif self.repair>2:
+    #         trw3=trw2
+
+    #     if trw3!='':
+    #         if(len(retsubstr)>0):
+    #             retsubstr += ','
+    #         retsubstr += GetRWTimeStr(trw3, self.ct)
+
+    #     if retsubstr !='':
+    #         retstr += '\n\t\t\t\t\t\t\t:hospital:('+retsubstr+')'
+    #     else:
+    #         retstr += '\n\t\t\t\t\t\t\t:hospital:(なし)'
+    #     return retstr
 
 #これはbot frameworkを使った書き方(discordpy-startupのサンプルコードのまま)
 #bot = commands.Bot(command_prefix='/')
@@ -143,7 +300,7 @@ async def on_ready():
 
 #============================================================
 # ループ処理のコア実装
-# 60秒に一回ループ
+# 30秒に一回ループ
 #============================================================
 @tasks.loop(seconds=60)
 async def loop():
@@ -152,6 +309,25 @@ async def loop():
     #text = str(wait_time_end) + ":" + str(wait_flg_end) 
     print(now_time)
 
+    #メンバー修理時間の減算処理
+    for server_info in server_infos.values():
+        stat_infos = server_info.statinfos
+        for stat_info in stat_infos.values():
+            
+            compcount = 0
+            if stat_info.updaterw3():
+                compcount+=1
+            if stat_info.updaterw2():
+                compcount+=1
+            if stat_info.updaterw1():
+                compcount+=1
+            if compcount>0:
+                stat_info.ct = datetime.datetime.now()
+                #sendstr = stat_info.User.display_name+' '+str(compcount)+'台修理できました！\n'
+                #sendstr = f'{stat_info.User.mention}'+' '+str(compcount)+'台修理できました！\n'
+                sendstr = f'{stat_info.User.mention}'+' '+getcompmes().format(str(compcount))+'\n'
+                sendstr+= stat_info.showstat()
+                await stat_info.Channel.send(sendstr)
 
 #============================================================
 #ループ処理実行
@@ -161,6 +337,9 @@ loop.start()
 
 #サーバーID毎のメンバー状態ハッシュリスト管理用
 server_infos = {}
+
+#サーバーID毎の初期化依頼時のチャンネルハッシュリスト管理用(※退院通知に使用する)
+server_infos_channel = {}
 
 #============================================================
 # メッセージ受信時に動作する処理
@@ -216,14 +395,21 @@ async def on_message(message):
         rw1 = ''
         rw2 = ''
         rw3 = ''
-        if(paramslen > 1 and repair > 0):
-            rw1 = params[1]
-        if(paramslen > 2 and repair > 1):
-            rw2 = params[2]
-        if(paramslen > 3 and repair > 2):
-            rw3 = params[3]
-
-
+        if(repair > 0):
+            if(paramslen > 1 and str.isnumeric(params[1]) and int(params[1])>0):
+                rw1 = params[1]
+        if(repair > 1):
+            if(paramslen > 2 and str.isnumeric(params[2]) and int(params[2])>0):
+                rw2 = params[2]
+            else:
+                rw2 = rw1
+        if(repair > 2):
+            if(paramslen > 3 and str.isnumeric(params[1]) and int(params[3])>0):
+                rw3 = params[3]
+            elif rw2!='':
+                rw3 = rw2
+            else:
+                rw3 = rw1
 
         #サーバーID文字列の取得(メンバー状態ハッシュリストを取り出すためのキーとして使用)
         guild_key = str(message.guild.id)
@@ -232,16 +418,21 @@ async def on_message(message):
 
         #サーバーIDに対応するメンバー状態ハッシュリストが生成されていない場合は生成する
         if not guild_key in server_infos:
-            server_infos[guild_key] = {}
+            #server_infos[guild_key] = {}
+            server_infos[guild_key] = ServerInfo({}, message.channel)
 
         #サーバーIDに対応するメンバー状態ハッシュリストの取得
-        stat_infos = server_infos[guild_key]
+        #stat_infos = server_infos[guild_key]
+        server_info = server_infos[guild_key]
+        stat_infos = server_info.statinfos
 
         #送信者メンバーが状態ハッシュリストに存在しない場合は
         if not author_key in stat_infos:
             #送信者メンバー状態をハッシュリストに追加
-            stat_infos[author_key] = Statinfo(message.author, wait, recover, repair, rw1, rw2, rw3)
+            stat_infos[author_key] = Statinfo(message.author, message.channel, wait, recover, repair, rw1, rw2, rw3)
         #送信者メンバー状態の更新
+        stat_infos[author_key].ct = datetime.datetime.now()
+        stat_infos[author_key].channel = message.channel
         stat_infos[author_key].wait = wait
         stat_infos[author_key].recover = recover
         stat_infos[author_key].repair = repair
@@ -250,7 +441,7 @@ async def on_message(message):
         stat_infos[author_key].rw3 = rw3
 
         #登録完了
-        retstr = stat_infos[author_key].showstat()+'\n'
+        retstr = stat_infos[author_key].showstat()
         await message.channel.send(retstr)
         return
     elif command == '/init':
@@ -260,7 +451,9 @@ async def on_message(message):
         #サーバーID文字列の取得(メンバー状態ハッシュリストを取り出すためのキーとして使用)
         guild_key = str(message.guild.id)
         #サーバーIDに対応するメンバー状態ハッシュリストを初期化
-        server_infos[guild_key] = {}
+        #server_infos[guild_key] = {}
+        server_infos[guild_key] = ServerInfo({}, message.channel)
+        
         #stat_infos = server_infos[guild_key]
         #for User in message.channel.Users:
             #stat_infos[author_key] = Statinfo(User, 3, 2, 0)
@@ -273,7 +466,8 @@ async def on_message(message):
         #状態一覧表示
         #============================================================
         guild_key = str(message.guild.id)
-        stat_infos = server_infos[guild_key]
+        server_info = server_infos[guild_key]
+        stat_infos = server_info.statinfos
 
         c_player = 0
         c_wait = 0
@@ -296,6 +490,7 @@ async def on_message(message):
         if(c_player>0):
             retstr +='('+str(c_go*100//c_all)+'%)'
         retstr+='\n'
+        #retstr += '\t\t\t:free::heart_decoration::ambulance:\n'
         for stat_info in stat_infos.values():
             retstr += stat_info.showstat()+'\n'
 
@@ -322,6 +517,20 @@ async def on_message(message):
         print(retstr)
 
         return
+    elif command == '/image':
+        
+        im = Image.new('RGB', (500, 300), (128, 128, 128))
+        draw = ImageDraw.Draw(im)
+        draw.ellipse((100, 100, 150, 200), fill=(255, 0, 0), outline=(0, 0, 0))
+        draw.rectangle((200, 100, 300, 200), fill=(0, 192, 192), outline=(255, 255, 255))
+        draw.line((350, 200, 450, 100), fill=(255, 255, 0), width=10)
+        output = io.BytesIO()
+        im.save(output, format='PNG')
+        image_png = output.getvalue()
+        await message.channel.send(file=discord.File(image_png, 'cool_image.png'))
+
+        return
+
     elif command == '/gogohelp':
         await message.channel.send(helpstr())
         return
