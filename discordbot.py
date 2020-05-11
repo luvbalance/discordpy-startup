@@ -261,7 +261,7 @@ async def on_ready():
 @tasks.loop(seconds=1)
 async def loop():
     now_time = getNowTimeNoMill()
-    print(datetime.datetime.now().strftime('%H:%M:%S') +' ' +now_time.strftime('%H:%M:%S'))
+    #print(datetime.datetime.now().strftime('%H:%M:%S') +' ' +now_time.strftime('%H:%M:%S'))
 
     #メンバー修理時間の減算処理
     for server_info in server_infos.values():
