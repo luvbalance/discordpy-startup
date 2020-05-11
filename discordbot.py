@@ -8,13 +8,15 @@ import traceback
 import re       #正規表現
 import random   #乱数
 
-#from PIL import Image, ImageDraw, ImageFilter
-import io
+# from PIL import Image, ImageDraw, ImageFilter
+# import io
 
 #実行する環境の環境変数に'DISCORD_BOT_TOKEN'を登録しておけば、
 #ローカルPC実行、Heloku実行どちらでも対応可能です。
+#GitHubにアップするときは、botトークンはソースに残してはいけない(コメントアウトでもだめ)
 token = os.environ['DISCORD_BOT_TOKEN']
 
+#完了メッセージ定義
 compmes =['{0}機修理できました'
         ,'{0}機修理できたような気がする'
         ,'{0}機、これで治ったかしら…'
@@ -43,15 +45,17 @@ compmes =['{0}機修理できました'
         ,'ほら、{0}機だ'
         ,'{0}機だ、持ってけ'
         ]
-#メッセージ乱数
-def getcompmes():
+
+#完了メッセージの取得
+def getcompmes(compcount):
     base = random.randint(0, 4)
     if base == 0:
         # 1/5の確率でレアメッセージ出現
-        return compmes[random.randint(1, len(compmes)-1)]
+        mes = compmes[random.randint(1, len(compmes)-1)]
+        return mes.format(str(compcount))
     else:
         # 9/10の確率で通常メッセージ
-        return compmes[0]
+        return compmes[0].format(str(compcount))
 
 #ヘルプ
 def helpstr():
@@ -77,6 +81,21 @@ def helpstr():
     retstr += '\t\t/320\n'
     retstr += '\t\t/102 120 110\n'
     return retstr
+
+#指定datetimeにadd分を足す
+def getWT(ct, add):
+    return ct + datetime.timedelta(minutes=add)
+
+#ミリ秒を０とした現在日時の取得
+def getNowTimeNoMill():
+    now_time = datetime.datetime.now().replace(second=0).replace(microsecond=0)
+    return now_time
+
+#指定datetimeのフォーマット文字列%H:%Mを返す
+def GetRWTimeStr(rw):
+    if(rw==''):
+        return ""
+    return rw.strftime("%H:%M")
 
 #半角数値文字列をアイコン文字列に置き換えます
 def NumIcomStr(numstr):
@@ -112,17 +131,6 @@ def NumIcon(value):
 
     return ret
 
-def GetRWTimeStr(rw, ct):
-    if(rw=='' or ct==''):
-        return ""
-    if(not rw.isnumeric()):
-        return ""
-    rwint = int(rw)
-
-    rwt= ct + datetime.timedelta(minutes=rwint)
-
-    return rwt.strftime("%H:%M")
-
 #サーバー毎の状態クラス
 class ServerInfo:
     def __init__(self, statinfos, channel):
@@ -131,98 +139,78 @@ class ServerInfo:
 
 #メンバー一人分の状態管理クラス
 class Statinfo:
-    def __init__(self, user, channel, wait, recover, repair, rw1, rw2, rw3):
-        self.User = user
-        self.Channel = channel
-        self.recover = recover
-        self.repair = repair
-        self.rw1 = rw1
-        self.rw2 = rw2
-        self.rw3 = rw3
-        self.ct = datetime.datetime.now()
+    def __init__(self, ct, user, channel, wait, recover, repair, rw1, rw2, rw3):
+        self.ct = ct            #登録/更新日 (datetime)
+        self.User = user        #メンバーを示すDiscordのユーザー情報
+        self.Channel = channel  #メンバーが状態登録を送信したDiscordのチャンネル情報
+        self.wait = wait        #待機数 (int)
+        self.recover = recover  #回復数 (int)
+        self.repair = repair    #入院数 (int)
+        self.rw1 = rw1          #修理完了時間1 (datetime or None)
+        self.rw2 = rw2          #修理完了時間2 (datetime or None)
+        self.rw3 = rw3          #修理完了時間3 (datetime or None)
+        return
+    # 
     def stat(self):
         return str(self.wait) + str(self.recover) +str(self.repair)
-    def updaterw3(self):
-        if str.isnumeric(self.rw3):
-            rw3i = int(self.rw3)
-            rw3i -=1
-            if(rw3i<1):
-                self.rw3 = ''
+    def updaterw3(self, now_time):
+        if not self.rw3 is None:
+            if(now_time >= self.rw3):
+                self.rw3 = None
                 if self.repair >0:
                     self.repair -= 1
                     self.wait += 1
                 return True
-            else:
-                self.rw3 = str(rw3i)
         return False
 
-    def updaterw2(self):
-        if str.isnumeric(self.rw2):
-            rw2i = int(self.rw2)
-            rw2i -=1
-            if(rw2i<1):
-                self.rw2 = ''
+    def updaterw2(self, now_time):
+        if not self.rw2 is None:
+            if(now_time >= self.rw2):
+                self.rw2 = None
                 if self.repair >0:
                     self.repair -= 1
                     self.wait += 1
-                if self.rw3!='':
+                if not self.rw3 is None:
                     self.rw2 = self.rw3
-                    self.rw3=''
+                    self.rw3=None
                 return True
-            else:
-                self.rw2 = str(rw2i)
         return False
 
-    def updaterw1(self):
-        if str.isnumeric(self.rw1):
-            rw1i = int(self.rw1)
-            rw1i -=1
-            if(rw1i<1):
-                self.rw1 = ''
+    def updaterw1(self, now_time):
+        if not self.rw1 is None:
+            if(now_time >= self.rw1):
+                self.rw1 = None
                 if self.repair >0:
                     self.repair -= 1
                     self.wait += 1
-                if self.rw2!='':
+                if not self.rw2 is None:
                     self.rw1 = self.rw2
-                    self.rw2=''
-                if self.rw3!='':
-                    if self.rw1=='':
+                    self.rw2 = None
+                if not self.rw3 is None:
+                    if self.rw1 is None:
                         self.rw1 = self.rw3
-                        self.rw3=''
-                    elif self.rw2=='':
+                        self.rw3 = None
+                    elif self.rw2 is None:
                         self.rw2 = self.rw3
-                        self.rw3=''
+                        self.rw3 = None
                 return True
-            else:
-                self.rw1 = str(rw1i)
         return False
     def showstat(self):
         retstr = self.ct.strftime("%H:%M")+' '+self.User.display_name
         #retstr = self.ct.strftime("%H:%M")+' '+NumIcomStr(self.stat())+self.User.display_name
         retsubstr = ''
-        if self.rw1!='':
-            retsubstr += GetRWTimeStr(self.rw1, self.ct)
+        if not self.rw1 is None:
+            retsubstr += GetRWTimeStr(self.rw1)
 
-        trw2 = ''
-        if self.rw2!='':
-            trw2=self.rw2
-        elif self.repair>1:
-            trw2=self.rw1
-        if trw2!='':
+        if not self.rw2 is None:
             if(len(retsubstr)>0):
                 retsubstr += ','
-            retsubstr += GetRWTimeStr(trw2, self.ct)
+            retsubstr += GetRWTimeStr(self.rw2)
 
-        trw3 = ''
-        if self.rw3!='':
-            trw3=self.rw3
-        elif self.repair>2:
-            trw3=trw2
-
-        if trw3!='':
+        if not self.rw3 is None:
             if(len(retsubstr)>0):
                 retsubstr += ','
-            retsubstr += GetRWTimeStr(trw3, self.ct)
+            retsubstr += GetRWTimeStr(self.rw3)
 
         #retstr += '\t\t\t:free::heart_decoration::ambulance:\n'
         retstr += '\n\t'
@@ -237,38 +225,6 @@ class Statinfo:
         else:
             retstr += ' :hospital:(-)'
         return retstr
-    # def showstat(self):
-    #     retstr = self.ct.strftime("%H:%M")+' '+NumIcomStr(self.stat())+self.User.display_name
-    #     retsubstr = ''
-    #     if self.rw1!='':
-    #         retsubstr += GetRWTimeStr(self.rw1, self.ct)
-
-    #     trw2 = ''
-    #     if self.rw2!='':
-    #         trw2=self.rw2
-    #     elif self.repair>1:
-    #         trw2=self.rw1
-    #     if trw2!='':
-    #         if(len(retsubstr)>0):
-    #             retsubstr += ','
-    #         retsubstr += GetRWTimeStr(trw2, self.ct)
-
-    #     trw3 = ''
-    #     if self.rw3!='':
-    #         trw3=self.rw3
-    #     elif self.repair>2:
-    #         trw3=trw2
-
-    #     if trw3!='':
-    #         if(len(retsubstr)>0):
-    #             retsubstr += ','
-    #         retsubstr += GetRWTimeStr(trw3, self.ct)
-
-    #     if retsubstr !='':
-    #         retstr += '\n\t\t\t\t\t\t\t:hospital:('+retsubstr+')'
-    #     else:
-    #         retstr += '\n\t\t\t\t\t\t\t:hospital:(なし)'
-    #     return retstr
 
 #これはbot frameworkを使った書き方(discordpy-startupのサンプルコードのまま)
 #bot = commands.Bot(command_prefix='/')
@@ -302,12 +258,10 @@ async def on_ready():
 # ループ処理のコア実装
 # 30秒に一回ループ
 #============================================================
-@tasks.loop(seconds=60)
+@tasks.loop(seconds=1)
 async def loop():
-    now_time = datetime.datetime.now().strftime('%H:%M')
-    # デバック用コメント
-    #text = str(wait_time_end) + ":" + str(wait_flg_end) 
-    print(now_time)
+    now_time = getNowTimeNoMill()
+    print(datetime.datetime.now().strftime('%H:%M:%S') +' ' +now_time.strftime('%H:%M:%S'))
 
     #メンバー修理時間の減算処理
     for server_info in server_infos.values():
@@ -315,17 +269,17 @@ async def loop():
         for stat_info in stat_infos.values():
             
             compcount = 0
-            if stat_info.updaterw3():
+            if stat_info.updaterw3(now_time):
                 compcount+=1
-            if stat_info.updaterw2():
+            if stat_info.updaterw2(now_time):
                 compcount+=1
-            if stat_info.updaterw1():
+            if stat_info.updaterw1(now_time):
                 compcount+=1
             if compcount>0:
-                stat_info.ct = datetime.datetime.now()
+                stat_info.ct = getNowTimeNoMill()
                 #sendstr = stat_info.User.display_name+' '+str(compcount)+'台修理できました！\n'
                 #sendstr = f'{stat_info.User.mention}'+' '+str(compcount)+'台修理できました！\n'
-                sendstr = f'{stat_info.User.mention}'+' '+getcompmes().format(str(compcount))+'\n'
+                sendstr = f'{stat_info.User.mention}'+' '+getcompmes(compcount)+'\n'
                 sendstr+= stat_info.showstat()
                 await stat_info.Channel.send(sendstr)
 
@@ -392,20 +346,21 @@ async def on_message(message):
         if(wait + repair > 3):
             repair = 3 - wait
 
-        rw1 = ''
-        rw2 = ''
-        rw3 = ''
+        rw1 = None
+        rw2 = None
+        rw3 = None
+        ct = getNowTimeNoMill()
         if(repair > 0):
             if(paramslen > 1 and str.isnumeric(params[1]) and int(params[1])>0):
-                rw1 = params[1]
+                rw1 = getWT(ct, int(params[1]))
         if(repair > 1):
             if(paramslen > 2 and str.isnumeric(params[2]) and int(params[2])>0):
-                rw2 = params[2]
+                rw2 = getWT(ct, int(params[2]))
             else:
                 rw2 = rw1
         if(repair > 2):
             if(paramslen > 3 and str.isnumeric(params[1]) and int(params[3])>0):
-                rw3 = params[3]
+                rw3 = getWT(ct, int(params[3]))
             elif rw2!='':
                 rw3 = rw2
             else:
@@ -429,9 +384,9 @@ async def on_message(message):
         #送信者メンバーが状態ハッシュリストに存在しない場合は
         if not author_key in stat_infos:
             #送信者メンバー状態をハッシュリストに追加
-            stat_infos[author_key] = Statinfo(message.author, message.channel, wait, recover, repair, rw1, rw2, rw3)
+            stat_infos[author_key] = Statinfo(ct, message.author, message.channel, wait, recover, repair, rw1, rw2, rw3)
         #送信者メンバー状態の更新
-        stat_infos[author_key].ct = datetime.datetime.now()
+        stat_infos[author_key].ct = getNowTimeNoMill()
         stat_infos[author_key].channel = message.channel
         stat_infos[author_key].wait = wait
         stat_infos[author_key].recover = recover
@@ -469,31 +424,41 @@ async def on_message(message):
         server_info = server_infos[guild_key]
         stat_infos = server_info.statinfos
 
-        c_player = 0
-        c_wait = 0
-        c_repair = 0
-        c_all = 0
+        #集計
+        c_player = 0    #メンバー数
+        c_wait = 0      #総待機数
+        c_repair = 0    #総修理数
+        c_all = 0       #総機体数
+
+        #メンバー状態情報を全て参照して集計
         for stat_info in stat_infos.values():
             c_player +=1
             c_wait += stat_info.wait
             c_repair += stat_info.repair
+        #総機体数 = メンバー数 x 3
         c_all = c_player * 3
+        #総出撃数 = 総機体数 - 総待機数 - 総修理数
         c_go = c_all - c_wait - c_repair
 
+        #送信文字列の生成
+        #1行目
         retstr = '**待機状況**(登録メンバー数:'+str(c_player)+')\n'
-
+        #2行目
         retstr += '待機数/機体数:'+ str(c_wait)+ '/' + str(c_all)
         if(c_player>0):
             retstr +='('+str(c_wait*100//c_all)+'%)'
         retstr+='\n'
+        #3行目
         retstr += '出撃数/機体数:'+ str(c_go)+ '/' + str(c_all)
         if(c_player>0):
             retstr +='('+str(c_go*100//c_all)+'%)'
         retstr+='\n'
         #retstr += '\t\t\t:free::heart_decoration::ambulance:\n'
+        #4行目～ 各メンバー状態
         for stat_info in stat_infos.values():
             retstr += stat_info.showstat()+'\n'
 
+        #送信
         await message.channel.send(retstr)
         return
 
@@ -517,7 +482,6 @@ async def on_message(message):
         print(retstr)
 
         return
-        #test
     # elif command == '/image':
         
     #     im = Image.new('RGB', (500, 300), (128, 128, 128))
